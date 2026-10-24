@@ -46,6 +46,21 @@ Mac. Einstellungen und Zeitplan bleiben dabei erhalten.
 | `ilias-sync log` | letzte Einträge im Protokoll |
 | `ilias-sync deinstallieren` | alles entfernen (deine Dateien bleiben) |
 
+**Zu den Ordnernamen:** Aus den ILIAS-Titeln entstehen kurze Namen, Übungen und Tutorien landen
+als Unterordner ihres Kurses:
+
+```
+Praktische Informatik I [V] [1. PG] (HWS 2026)        →  Praktische Informatik I/
+Praktische Informatik I [Ü] [1. PG] (HWS 2026)        →  Praktische Informatik I/Übung/
+Praktische Informatik I [T] (HWS 2026)                →  Praktische Informatik I/Tutorium/
+Programmierpraktikum I, Große Übung [Ü] (HWS 2026)    →  Programmierpraktikum I/Große Übung/
+Marketing [1. PG]  (Gruppe)                           →  Marketing/Übungsgruppe/
+IS 201 Wirtschaftsinformatik I: Einführung …          →  Wirtschaftsinformatik I/
+```
+
+In `ilias-sync kurse` benennt `u <Nummer>` einen Ordner um (mit `/` für Unterordner), und `n`
+übernimmt für alle Kurse die aktuellen Vorschläge. Schon geladene Dateien ziehen jeweils mit um.
+
 **Zum Zeitplan:** Ist der Mac zu einer Uhrzeit im Ruhezustand, holt macOS (launchd) den Abgleich
 nach dem Aufwachen nach; zusätzlich läuft einer beim Anmelden. Solche nachgeholten Abgleiche
 lässt das Programm zwischen 23 und 6 Uhr aus, außer du hast selbst eine Uhrzeit in diesem

@@ -148,7 +148,10 @@ def _forget_password(uni_id: str) -> None:
 
 
 def rename_course(config: dict, state: dict, title: str, new_name: str) -> bool:
-    """Benennt den Ordner eines Kurses um, auch schon geladene Dateien (Spiegel und Zielordner)."""
+    """Benennt den Ordner eines Kurses um, auch schon geladene Dateien (Spiegel und Zielordner).
+
+    Mit "/" im Namen landet der Kurs in einem Unterordner, z. B. "Praktische Informatik I/Übung".
+    """
     old = config["courses"][title]["name"]
     new = courses.safe_folder_name(new_name)
     if new == old:
@@ -156,8 +159,12 @@ def rename_course(config: dict, state: dict, title: str, new_name: str) -> bool:
     if any(s["name"] == new for t, s in config["courses"].items() if t != title):
         fail(f"„{new}“ ist schon vergeben.")
         return False
+    if new.startswith(old + "/"):
+        fail(f"„{new}“ liegt im bisherigen Ordner „{old}“, bitte einen anderen Namen wählen.")
+        return False
     for base in (MIRROR_DIR, Path(config["target_dir"])) if config["target_dir"] else (MIRROR_DIR,):
         if (base / old).exists() and not (base / new).exists():
+            (base / new).parent.mkdir(parents=True, exist_ok=True)
             (base / old).rename(base / new)
     for settings in config["courses"].values():  # zugehörige Übungsgruppen ziehen mit
         if settings["name"] == old or settings["name"].startswith(old + "/"):
@@ -167,6 +174,32 @@ def rename_course(config: dict, state: dict, title: str, new_name: str) -> bool:
         for path, value in state["published"].items()
     }
     return True
+
+
+def apply_suggested_names(config: dict, state: dict) -> None:
+    """Schlägt alle Ordnernamen neu vor (Übungen und Tutorien als Unterordner) und übernimmt sie."""
+    entries = [{"title": title, "url": settings.get("url", "")} for title, settings in config["courses"].items()]
+    proposal = {title: settings["name"] for title, settings in courses.suggest(entries, {}).items()}
+    changes = {title: name for title, name in proposal.items() if config["courses"][title]["name"] != name}
+    if not changes:
+        ok("Alle Ordnernamen entsprechen schon dem Vorschlag.")
+        return
+    for title, name in sorted(changes.items(), key=lambda item: item[1].casefold()):
+        print(f"    {config['courses'][title]['name']}  →  {bold(name)}")
+    if not yes("Diese Namen übernehmen? Schon geladene Dateien ziehen mit um.", True):
+        return
+    # Hauptkurse zuerst, damit Unterordner in deren neuem Ordner landen. Ist ein Name noch belegt
+    # (z. B. "A" → "B", während "B" → "C/Übung" wartet), erst die anderen umbenennen.
+    pending = dict(changes)
+    while pending:
+        free = [title for title, name in pending.items()
+                if not any(s["name"] == name for other, s in config["courses"].items() if other != title)]
+        if not free:
+            break
+        title = min(free, key=lambda t: pending[t].count("/"))
+        rename_course(config, state, title, pending.pop(title))
+    for title, name in pending.items():
+        fail(f"„{config['courses'][title]['name']}“ nicht umbenannt, „{name}“ ist belegt.")
 
 
 def edit_courses(config: dict, state: dict) -> None:
@@ -181,14 +214,19 @@ def edit_courses(config: dict, state: dict) -> None:
             mark = green("✓") if settings["sync"] else dim("·")
             name = f"{settings['name']:<{name_width}.{name_width}}"
             print(f"   {number:>2}  {mark}  {name if settings['sync'] else dim(name)}  {dim(title[:title_width])}")
-        print(dim("\n  Nummer = an/aus  ·  u Nummer = Ordner umbenennen  ·  Enter = fertig"))
+        print(dim("\n  Nummer = an/aus  ·  u Nummer = Ordner umbenennen (mit / für Unterordner)"))
+        print(dim("  n = alle Namen neu vorschlagen  ·  Enter = fertig"))
         answer = input("  > ").strip().lower()
         if not answer:
             break
+        if answer == "n":
+            apply_suggested_names(config, state)
+            items = sorted(config["courses"].items(), key=lambda item: item[1]["name"].casefold())
+            continue
         rename = answer.startswith("u")
         number = answer.lstrip("u ").strip()
         if not number.isdigit() or not 1 <= int(number) <= len(items):
-            fail(f"Bitte eine Nummer von 1 bis {len(items)} eingeben, „u“ und eine Nummer, oder nur Enter.")
+            fail(f"Bitte eine Nummer von 1 bis {len(items)} eingeben, „u“ und eine Nummer, „n“ oder nur Enter.")
             continue
         title, settings = items[int(number) - 1]
         if rename:
