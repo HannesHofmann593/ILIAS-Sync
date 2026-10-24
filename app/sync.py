@@ -8,6 +8,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import shutil
 import subprocess
 import traceback
@@ -35,6 +36,11 @@ class CrawlFailed(Exception):
 
 def write_pferd_config(config: dict) -> Path:
     path = APP_DIR / "pferd.cfg"
+    # dasselbe für Kurse in Unterordnern ("Praktische Informatik I/Übung/Dateien")
+    nested_rules = []
+    for name in sorted({s["name"] for s in config["courses"].values() if "/" in s["name"]}, key=len, reverse=True):
+        pattern = f"({re.escape(name)})/Dateien"
+        nested_rules += [f'    {pattern!r} -re-> "{{g1}}"', f'    {pattern + "/(.+)"!r} -re-> "{{g1}}/{{g2}}"']
     lines = [
         "# Wird bei jedem Abgleich neu geschrieben, Änderungen gehen verloren.",
         "[DEFAULT]",
@@ -58,6 +64,7 @@ def write_pferd_config(config: dict) -> Path:
         "http_timeout = 60",
         # Der Ordner "Dateien", den fast jeder Kurs hat, ist eine Ebene zu viel
         "transform =",
+        *nested_rules,
         '    "([^/]+)/Dateien" -re-> "{g1}"',
         '    "([^/]+)/Dateien/(.+)" -re-> "{g1}/{g2}"',
         "",

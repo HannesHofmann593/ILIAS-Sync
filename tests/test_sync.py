@@ -85,3 +85,26 @@ def test_run_counts_crawl_failures(tmp_path, monkeypatch, notifications):
     sync.run()
     assert core.load_state()["crawl_failures"] == 2
     assert notifications[-1][0] == "ILIAS nicht erreichbar"
+
+
+def test_pferd_config_drops_files_folder_also_in_subfolders():
+    from pathlib import PurePath
+
+    from PFERD.transformer import Transformer
+
+    config = {**core.DEFAULT_CONFIG, "uni_id": "mmuster", "courses": {
+        "A": {"name": "Praktische Informatik I", "sync": True},
+        "B": {"name": "Praktische Informatik I/Übung (2)", "sync": True},
+    }}
+    text = sync.write_pferd_config(config).read_text(encoding="utf-8")
+    rules = text.split("transform =\n")[1].split("\n\n")[0]
+    transformer = Transformer(rules)
+
+    def moved(path):
+        return str(transformer.transform(PurePath(path)))
+
+    assert moved("Praktische Informatik I/Dateien/Folien.pdf") == "Praktische Informatik I/Folien.pdf"
+    assert moved("Praktische Informatik I/Übung (2)/Dateien/Blatt.pdf") == "Praktische Informatik I/Übung (2)/Blatt.pdf"
+    assert moved("Praktische Informatik I/Übung (2)/Dateien") == "Praktische Informatik I/Übung (2)"
+    other = "Praktische Informatik I/Übung (2)/Sonstiges/x.pdf"
+    assert moved(other) == other
